@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <errno.h>
+#include <regex.h>  
 
 /* reads in barcodes  */
 
@@ -69,6 +70,32 @@ void print_barcode (int year, char *filler, long belnr) {
     
 }
 
+regex_t compile_regex (char * regex) {
+    regex_t r;
+    int regex_rv;
+    
+    regex_rv = regcomp(&r, regex, REG_EXTENDED);
+    if (regex_rv) {
+        fprintf(stderr, "Could not compile regex_5000_9999\n");
+        exit(1);
+    }
+    return r;
+}
+
+bool regex_matches (regex_t r, char * input) {
+    
+    int rv = regexec(&r, input, 0, NULL, 0);
+    if (!rv) {
+        return true;
+    } else if (rv == REG_NOMATCH) {
+        return false;
+    }
+    else {
+        printf("Exiting because regex failed!");
+        exit(1);
+    }
+    return false;
+}
 
 int main (void) {
     printf("Dieses Programm erlaubt das Drucken von Barcodes.\n");
@@ -78,8 +105,36 @@ int main (void) {
     
     char * x = (char*)malloc(10);
     
+    // Prepare regex
+    regex_t regex_5000_9999             = compile_regex("^[5-9][0-9]{3}$");
+    regex_t regex_100000_199999         = compile_regex("^1[0-9]{5}$");
+    regex_t regex_range_5000_9999       = compile_regex("^[5-9][0-9]{3}-[5-9][0-9]{3}$");
+    regex_t regex_range_100000_199999   = compile_regex("^1[0-9]{5}-1[0-9]{5}$");
+    
+    
     while (true) {
         scanf("%s", x);
+
+        /* Execute regular expression */
+
+        if ( regex_matches(regex_5000_9999, x) ) {
+            printf("5000er match!");
+            char *end;
+            long in = strtol(x, &end, 10);
+            print_barcode(year, "00000", in);
+            
+        } else if ( regex_matches(regex_100000_199999, x) ) {
+            printf("100000er match!");
+            char *end;
+            long in = strtol(x, &end, 10);
+            print_barcode(year, "000", in);
+
+        } else if ( regex_matches(regex_range_5000_9999, x) ) {
+            printf("5000er RANGE match!");
+        } else if ( regex_matches(regex_range_100000_199999, x) ) {
+            printf("100000er RANGE match!");
+        }
+        
         char *end;
         long in = strtol(x, &end, 10);
         
@@ -93,7 +148,7 @@ int main (void) {
             
         } else if ((in >= 2014 && in <= 2099)) {
             printf("JAHR gesetzt: %ld \n", in);
-            year = in;
+            year = (int) in;
             write_year_to_file(year);
             
         } else {
@@ -101,6 +156,10 @@ int main (void) {
         }
         
     }
+    
+    /* Free memory allocated to the pattern buffer by regcomp() */
+    regfree(&regex_5000_9999);
+   // regfree(&regex_100000_199999);
     
     return 0;
 }
