@@ -5,6 +5,11 @@
 #include <stdint.h>
 #include <errno.h>
 #include <regex.h>  
+#include <unistd.h>
+#include <pthread.h>
+#include "pipe.h"
+
+#define THREADS 4
 
 /* reads in barcodes  */
 
@@ -61,28 +66,6 @@ int read_year_from_file () {
 }
 
 
-void print_barcode (int year, long belnr) {
-    printf("Barcode wird gedruckt: %i%09ld\n", year, belnr);
-    
-    // TODO remove this
-    return;
-    
-    // generate barcode
-    
-    char barcode_cmd[100];
-    sprintf(barcode_cmd, "barcode -b %i%09ld -o out.ps -e \"i25\" -g \"590x300\";", year, belnr);
-    system(barcode_cmd);
-    
-    // convert .ps to .png with graphicsmagick
-    
-    system("gm convert out.ps -gravity south -resize 80% -extent 696x271 out.png");
-    
-    // print with label printer Brother QL-720NW
-    
-    system("brother_ql_create --model QL-720NW --label-size 62x29 --no-cut out.png > /dev/usb/lp0");
-    
-}
-
 regex_t compile_regex (char * regex) {
     regex_t r;
     int regex_rv;
@@ -112,8 +95,121 @@ bool regex_matches (regex_t r, char * input) {
 }
 
 
+void create_barcode (char * barcode) {
+    printf("create_barcode() = %s\n", barcode);
+
+#ifdef TEST
+    return;
+#endif
+    
+    // generate barcode
+    
+    char barcode_cmd[100];
+    sprintf(barcode_cmd, "barcode -b %s -o %s.ps -e \"i25\" -g \"590x300\";", barcode, barcode);
+    system(barcode_cmd);
+    
+    // convert .ps to .png with graphicsmagick
+    
+    char convert_cmd[100];
+    sprintf(convert_cmd, "gm convert %s.ps -gravity south -resize 80%% -extent 696x271 %s.png", barcode, barcode);
+    system(convert_cmd);
+}
+
+
+void print_label ( char * barcode ) {
+    printf("print_label: %s\n", barcode);
+    
+#ifdef TEST
+    return;
+#endif
+    // print with label printer Brother QL-720NW
+    
+    char print_cmd[100];
+    sprintf(print_cmd, "brother_ql_create --model QL-720NW --label-size 62x29 --rotate {180} --no-cut %s.png > /dev/usb/lp0", barcode);
+    system(print_cmd);
+}
+
+
+void print_barcode (int year, long belnr) {
+    char * barcode = malloc(13+1);
+    sprintf(barcode, "%i%09ld", year, belnr);
+    create_barcode(barcode);
+    print_label(barcode);
+    free(barcode);
+}
+
+
+struct Barcode {
+    char * str;
+    int year;
+    long belnr;
+};
+
+struct Pipes {
+    pipe_consumer_t* cons_pipe_creator;
+    pipe_producer_t* prod_pipe_printer;
+};
+
+void * creator_thread_func (void *arg) {
+    printf("creator_thread_func\n");
+    struct Pipes * pipes = arg;
+    pipe_consumer_t* pipe_creator_cons = pipes->cons_pipe_creator;
+    while (true) {
+        struct Barcode bc;
+        (void) pipe_pop(pipe_creator_cons, &bc, 1);
+        create_barcode(bc.str);
+        pipe_push(pipes->prod_pipe_printer, &bc, 1);
+    }
+    return NULL;
+}
+
+
+void * printer_thread_func (void *arg) {
+    printf("printer_thread_func\n");
+    pipe_consumer_t* pipe_printer_cons = arg;
+    while (true) {
+        struct Barcode bc;
+        (void) pipe_pop(pipe_printer_cons, &bc, 1);
+        print_label(bc.str);
+    }
+    return NULL;
+}
+
+
 int main (void) {
     printf("Dieses Programm erlaubt das Drucken von Barcodes.\n");
+
+    chdir("barcodes");
+    
+    // Creating pipes
+    
+    pipe_t* pipe_creator = pipe_new(sizeof(struct Barcode), 0);
+    pipe_producer_t* pipe_creator_prod = pipe_producer_new(pipe_creator);
+    pipe_consumer_t* pipe_creator_cons = pipe_consumer_new(pipe_creator);
+    pipe_free(pipe_creator);
+    
+    pipe_t* pipe_printer = pipe_new(sizeof(struct Barcode), 0);
+    pipe_producer_t* pipe_printer_prod = pipe_producer_new(pipe_printer);
+    pipe_consumer_t* pipe_printer_cons = pipe_consumer_new(pipe_printer);
+    pipe_free(pipe_printer);
+
+    struct Pipes pipes;
+    pipes.cons_pipe_creator = pipe_creator_cons;
+    pipes.prod_pipe_printer = pipe_printer_prod;
+    
+    pthread_t creator_thread, printer_thread;
+    
+    if ( pthread_create(&creator_thread, NULL, creator_thread_func, &pipes) ) {
+        fprintf(stderr, "Error creating thread\n");
+        return 1;
+    }
+    
+    if ( pthread_create(&printer_thread, NULL, printer_thread_func, pipe_printer_cons) ) {
+        fprintf(stderr, "Error creating thread\n");
+        return 1;
+    }
+
+    
     
     int year  = read_year_from_file();
     long belnr = 5000;
@@ -139,9 +235,12 @@ int main (void) {
              regex_matches(regex_100000_199999, x) ) {
             printf("5000/100000 match!\n");
             char *end;
-            long in = strtol(x, &end, 10);
-            print_barcode(year, in);
-            belnr = in;
+            belnr = strtol(x, &end, 10);
+            char * barcode = malloc(13+1);
+            sprintf(barcode, "%i%09ld", year, belnr);
+            struct Barcode bc = {barcode, year, belnr};
+            pipe_push(pipe_creator_prod, &bc, 1);
+           
         }
         else if ( regex_matches(regex_range_5000_9999, x) ) {
             printf("5000-9999 match!\n");
@@ -152,8 +251,8 @@ int main (void) {
             if ( from > to ) {
                 continue;
             }
-            
-            for ( long i = from; i <= to; i++ ) {
+            long i = 0;
+            for ( i = from; i <= to; i++ ) {
                 print_barcode(year, i);
             }
             
@@ -168,8 +267,8 @@ int main (void) {
             if ( from > to ) {
                 continue;
             }
-            
-            for ( long i = from; i <= to; i++ ) {
+            long i = 0;
+            for ( i = from; i <= to; i++ ) {
                 print_barcode(year, i);
             }
             
@@ -188,7 +287,7 @@ int main (void) {
             print_barcode(year, belnr);
         }
         else {
-            printf("UNGÜLTIG\n");
+            printf("UNGUELTIG\n");
         }
     }
     

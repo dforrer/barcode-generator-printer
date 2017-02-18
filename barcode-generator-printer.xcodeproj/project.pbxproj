@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		65D179151E577E6B00D57192 /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = 65D179141E577E6B00D57192 /* main.c */; };
+		65D1791D1E58CF6800D57192 /* pipe.c in Sources */ = {isa = PBXBuildFile; fileRef = 65D1791B1E58CF6800D57192 /* pipe.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -25,6 +26,8 @@
 /* Begin PBXFileReference section */
 		65D179111E577E6B00D57192 /* barcode-generator-printer */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "barcode-generator-printer"; sourceTree = BUILT_PRODUCTS_DIR; };
 		65D179141E577E6B00D57192 /* main.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = main.c; sourceTree = "<group>"; };
+		65D1791B1E58CF6800D57192 /* pipe.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = pipe.c; sourceTree = "<group>"; };
+		65D1791C1E58CF6800D57192 /* pipe.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = pipe.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -58,6 +61,8 @@
 			isa = PBXGroup;
 			children = (
 				65D179141E577E6B00D57192 /* main.c */,
+				65D1791B1E58CF6800D57192 /* pipe.c */,
+				65D1791C1E58CF6800D57192 /* pipe.h */,
 			);
 			path = "barcode-generator-printer";
 			sourceTree = "<group>";
@@ -120,6 +125,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				65D179151E577E6B00D57192 /* main.c in Sources */,
+				65D1791D1E58CF6800D57192 /* pipe.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -169,6 +175,11 @@
 				MACOSX_DEPLOYMENT_TARGET = 10.12;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
+				OTHER_CFLAGS = (
+					"-D",
+					TEST,
+				);
+				OTHER_LDFLAGS = "";
 				SDKROOT = macosx;
 			};
 			name = Debug;
@@ -209,6 +220,11 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 10.12;
 				MTL_ENABLE_DEBUG_INFO = NO;
+				OTHER_CFLAGS = (
+					"-D",
+					TEST,
+				);
+				OTHER_LDFLAGS = "";
 				SDKROOT = macosx;
 			};
 			name = Release;
@@ -216,6 +232,7 @@
 		65D179191E577E6B00D57192 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				OTHER_LDFLAGS = "";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
@@ -223,6 +240,7 @@
 		65D1791A1E577E6B00D57192 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				OTHER_LDFLAGS = "";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;
