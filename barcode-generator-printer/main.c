@@ -111,7 +111,7 @@ void create_barcode (char * barcode) {
     // convert .ps to .png with graphicsmagick
     
     char convert_cmd[100];
-    sprintf(convert_cmd, "gm convert %s.ps -gravity south -resize 80%% -extent 696x271 %s.png", barcode, barcode);
+    sprintf(convert_cmd, "gm convert %s.ps -gravity south -resize 80%% -extent 696x271 -rotate 180 %s.png", barcode, barcode);
     system(convert_cmd);
 }
 
@@ -128,6 +128,7 @@ void print_label ( char * barcode ) {
     sprintf(print_cmd, "brother_ql_create --model QL-720NW --label-size 62x29 --no-cut %s.png > /dev/usb/lp0", barcode);
     system(print_cmd);
 }
+
 
 struct Barcode {
     char * str;
@@ -149,13 +150,14 @@ struct Pipes {
     pipe_producer_t* prod_pipe_printer;
 };
 
+
 void * creator_thread_func (void *arg) {
     printf("creator_thread_func\n");
     struct Pipes * pipes = arg;
     pipe_consumer_t* pipe_creator_cons = pipes->cons_pipe_creator;
     while (true) {
         struct Barcode bc;
-        (void) pipe_pop(pipe_creator_cons, &bc, 1);
+        (void) pipe_pop(pipe_creator_cons, &bc, 1); // blocking
         create_barcode(bc.str);
         pipe_push(pipes->prod_pipe_printer, &bc, 1);
     }
@@ -168,7 +170,7 @@ void * printer_thread_func (void *arg) {
     pipe_consumer_t* pipe_printer_cons = arg;
     while (true) {
         struct Barcode bc;
-        (void) pipe_pop(pipe_printer_cons, &bc, 1);
+        (void) pipe_pop(pipe_printer_cons, &bc, 1);  // blocking
         print_label(bc.str);
         char sys_call [100];
 #ifdef TEST
@@ -214,8 +216,6 @@ int main (void) {
         fprintf(stderr, "Error creating thread\n");
         return 1;
     }
-
-    
     
     int year  = read_year_from_file();
     long belnr = 5000;
