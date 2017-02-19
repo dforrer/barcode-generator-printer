@@ -125,25 +125,24 @@ void print_label ( char * barcode ) {
     // print with label printer Brother QL-720NW
     
     char print_cmd[100];
-    sprintf(print_cmd, "brother_ql_create --model QL-720NW --label-size 62x29 --rotate {180} --no-cut %s.png > /dev/usb/lp0", barcode);
+    sprintf(print_cmd, "brother_ql_create --model QL-720NW --label-size 62x29 --no-cut %s.png > /dev/usb/lp0", barcode);
     system(print_cmd);
 }
-
-
-void print_barcode (int year, long belnr) {
-    char * barcode = malloc(13+1);
-    sprintf(barcode, "%i%09ld", year, belnr);
-    create_barcode(barcode);
-    print_label(barcode);
-    free(barcode);
-}
-
 
 struct Barcode {
     char * str;
     int year;
     long belnr;
 };
+
+
+void print_barcode (pipe_producer_t* pipe_creator_prod, int year, long belnr) {
+    char * barcode = malloc(13+1);
+    sprintf(barcode, "%i%09ld", year, belnr);
+    struct Barcode bc = {barcode, year, belnr};
+    pipe_push(pipe_creator_prod, &bc, 1);
+}
+
 
 struct Pipes {
     pipe_consumer_t* cons_pipe_creator;
@@ -171,6 +170,13 @@ void * printer_thread_func (void *arg) {
         struct Barcode bc;
         (void) pipe_pop(pipe_printer_cons, &bc, 1);
         print_label(bc.str);
+        char sys_call [100];
+#ifdef TEST
+        continue;
+#endif
+        sprintf(sys_call, "rm %s.*", bc.str);
+        system(sys_call);
+        free(bc.str);
     }
     return NULL;
 }
@@ -236,11 +242,7 @@ int main (void) {
             printf("5000/100000 match!\n");
             char *end;
             belnr = strtol(x, &end, 10);
-            char * barcode = malloc(13+1);
-            sprintf(barcode, "%i%09ld", year, belnr);
-            struct Barcode bc = {barcode, year, belnr};
-            pipe_push(pipe_creator_prod, &bc, 1);
-           
+            print_barcode(pipe_creator_prod, year, belnr);
         }
         else if ( regex_matches(regex_range_5000_9999, x) ) {
             printf("5000-9999 match!\n");
@@ -253,7 +255,7 @@ int main (void) {
             }
             long i = 0;
             for ( i = from; i <= to; i++ ) {
-                print_barcode(year, i);
+                print_barcode(pipe_creator_prod, year, i);
             }
             
             belnr = to;
@@ -269,7 +271,7 @@ int main (void) {
             }
             long i = 0;
             for ( i = from; i <= to; i++ ) {
-                print_barcode(year, i);
+                print_barcode(pipe_creator_prod, year, i);
             }
             
             belnr = to;
@@ -284,7 +286,7 @@ int main (void) {
         else if ( regex_matches(regex_plus, x) ) {
             printf("Inkrement\n");
             belnr++;
-            print_barcode(year, belnr);
+            print_barcode(pipe_creator_prod, year, belnr);
         }
         else {
             printf("UNGUELTIG\n");
