@@ -150,7 +150,7 @@ void print_label ( struct Barcode * bc ) {
     sprintf(print_cmd, "brother_ql_create --model QL-720NW --label-size 62x29 -c 1 --no-cut %s.png > /dev/usb/lp0", bc->filename);
     
     if ( access( "/dev/usb/lp0", W_OK ) != -1 ) {
-        printf("/dev/usb/lp0 exists!\n");
+        //printf("/dev/usb/lp0 exists!\n");
         system(print_cmd);
     } else {
         printf("/dev/usb/lp0 doesn't exist!\n");
@@ -163,9 +163,10 @@ void print_barcode (pipe_producer_t* pipe_creator_prod, int year, long belnr) {
     char * filename = malloc(200);
     char rand[10+1];
     gen_random(rand, 10);
+    sprintf(barcode, "%i%09ld", year, belnr);
     sprintf(filename,"%s_%s",barcode, rand);
 
-    sprintf(barcode, "%i%09ld", year, belnr);
+    printf("filename: %s\n",filename);
     struct Barcode bc = {barcode, year, belnr, filename};
     pipe_push(pipe_creator_prod, &bc, 1);
 }
@@ -205,6 +206,7 @@ void * printer_thread_func (void *arg) {
         sprintf(sys_call, "rm %s.*", bc.filename);
         system(sys_call);
         free(bc.str);
+        free(bc.filename);
     }
     return NULL;
 }
