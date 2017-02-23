@@ -27,6 +27,20 @@ char* substring (const char* in, int from, int size) {
 }
 
 
+void gen_random(char *s, const int len) {
+    static const char alphanum[] =
+    "0123456789"
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    "abcdefghijklmnopqrstuvwxyz";
+    
+    for (int i = 0; i < len; ++i) {
+        s[i] = alphanum[rand() % (sizeof(alphanum) - 1)];
+    }
+    
+    s[len] = 0;
+}
+
+
 int write_year_to_file (int year) {
     
     FILE *f = fopen("year.txt", "w");
@@ -95,9 +109,16 @@ bool regex_matches (regex_t r, char * input) {
     return false;
 }
 
+struct Barcode {
+    char * str;
+    int year;
+    long belnr;
+    char * filename;
+};
 
-void create_barcode (char * barcode) {
-    printf("create_barcode() = %s\n", barcode);
+
+void create_barcode ( struct Barcode * bc) {
+    printf("create_barcode() = %s\n", bc->str);
 
 #ifdef TEST
     return;
@@ -106,19 +127,19 @@ void create_barcode (char * barcode) {
     // generate barcode
     
     char barcode_cmd[100];
-    sprintf(barcode_cmd, "barcode -b %s -o %s.ps -e \"i25\" -g \"590x300\";", barcode, barcode);
+    sprintf(barcode_cmd, "barcode -b %s -o %s.ps -e \"i25\" -g \"590x300\";", bc->str, bc->filename);
     system(barcode_cmd);
     
     // convert .ps to .png with graphicsmagick
     
     char convert_cmd[100];
-    sprintf(convert_cmd, "gm convert %s.ps -gravity south -resize 80%% -extent 696x271 -rotate 180 %s.png", barcode, barcode);
+    sprintf(convert_cmd, "gm convert %s.ps -gravity south -resize 80%% -extent 696x271 -rotate 180 %s.png", bc->filename, bc->filename);
     system(convert_cmd);
 }
 
 
-void print_label ( char * barcode ) {
-    printf("print_label: %s\n", barcode);
+void print_label ( struct Barcode * bc ) {
+    printf("print_label: %s\n", bc->str);
     
 #ifdef TEST
     return;
@@ -126,7 +147,7 @@ void print_label ( char * barcode ) {
     // print with label printer Brother QL-720NW
     
     char print_cmd[200];
-    sprintf(print_cmd, "brother_ql_create --model QL-720NW --label-size 62x29 -c 1 --no-cut %s.png > /dev/usb/lp0", barcode);
+    sprintf(print_cmd, "brother_ql_create --model QL-720NW --label-size 62x29 -c 1 --no-cut %s.png > /dev/usb/lp0", bc->filename);
     
     if ( access( "/dev/usb/lp0", W_OK ) != -1 ) {
         printf("/dev/usb/lp0 exists!\n");
@@ -137,18 +158,15 @@ void print_label ( char * barcode ) {
 }
 
 
-struct Barcode {
-    char * str;
-    int year;
-    long belnr;
-    char * filename;
-};
-
-
 void print_barcode (pipe_producer_t* pipe_creator_prod, int year, long belnr) {
     char * barcode = malloc(13+1);
+    char * filename = malloc(200);
+    char rand[10+1];
+    gen_random(rand, 10);
+    sprintf(filename,"%s_%s",barcode, rand);
+
     sprintf(barcode, "%i%09ld", year, belnr);
-    struct Barcode bc = {barcode, year, belnr};
+    struct Barcode bc = {barcode, year, belnr, filename};
     pipe_push(pipe_creator_prod, &bc, 1);
 }
 
@@ -166,7 +184,7 @@ void * creator_thread_func (void *arg) {
     while (true) {
         struct Barcode bc;
         (void) pipe_pop(pipe_creator_cons, &bc, 1); // blocking
-        create_barcode(bc.str);
+        create_barcode(&bc);
         pipe_push(pipes->prod_pipe_printer, &bc, 1);
     }
     return NULL;
@@ -179,12 +197,12 @@ void * printer_thread_func (void *arg) {
     while (true) {
         struct Barcode bc;
         (void) pipe_pop(pipe_printer_cons, &bc, 1);  // blocking
-        print_label(bc.str);
+        print_label(&bc);
         char sys_call [40];
 #ifdef TEST
         continue;
 #endif
-        sprintf(sys_call, "rm %s.*", bc.str);
+        sprintf(sys_call, "rm %s.*", bc.filename);
         system(sys_call);
         free(bc.str);
     }
