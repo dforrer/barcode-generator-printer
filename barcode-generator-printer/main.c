@@ -7,9 +7,10 @@
 #include <regex.h>  
 #include <unistd.h>
 #include <pthread.h>
+#include <sys/stat.h>
+
 #include "pipe.h"
 
-#define THREADS 4
 
 /* reads in barcodes  */
 
@@ -124,9 +125,15 @@ void print_label ( char * barcode ) {
 #endif
     // print with label printer Brother QL-720NW
     
-    char print_cmd[100];
-    sprintf(print_cmd, "brother_ql_create --model QL-720NW --label-size 62x29 --no-cut %s.png > /dev/usb/lp0", barcode);
-    system(print_cmd);
+    char print_cmd[200];
+    sprintf(print_cmd, "brother_ql_create --model QL-720NW --label-size 62x29 -c 1 --no-cut %s.png > /dev/usb/lp0", barcode);
+    
+    if ( access( "/dev/usb/lp0", W_OK ) != -1 ) {
+        printf("/dev/usb/lp0 exists!\n");
+        system(print_cmd);
+    } else {
+        printf("/dev/usb/lp0 doesn't exist!\n");
+    }
 }
 
 
@@ -134,6 +141,7 @@ struct Barcode {
     char * str;
     int year;
     long belnr;
+    char * filename;
 };
 
 
@@ -146,8 +154,8 @@ void print_barcode (pipe_producer_t* pipe_creator_prod, int year, long belnr) {
 
 
 struct Pipes {
-    pipe_consumer_t* cons_pipe_creator;
-    pipe_producer_t* prod_pipe_printer;
+    pipe_consumer_t *cons_pipe_creator;
+    pipe_producer_t *prod_pipe_printer;
 };
 
 
@@ -172,7 +180,7 @@ void * printer_thread_func (void *arg) {
         struct Barcode bc;
         (void) pipe_pop(pipe_printer_cons, &bc, 1);  // blocking
         print_label(bc.str);
-        char sys_call [100];
+        char sys_call [40];
 #ifdef TEST
         continue;
 #endif
@@ -233,7 +241,7 @@ int main (void) {
     
     
     while (true) {
-        scanf("%s", x);
+        scanf("%s", x); // blocking
 
         /* Execute regular expression */
 
@@ -295,7 +303,7 @@ int main (void) {
     
     /* Free memory allocated to the pattern buffer by regcomp() */
     //regfree(&regex_5000_9999);
-    // regfree(&regex_100000_199999);
+    //regfree(&regex_100000_199999);
     
     return 0;
 }
