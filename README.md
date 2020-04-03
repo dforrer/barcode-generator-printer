@@ -73,3 +73,10 @@ Keyboard entry:
 "*" + 1000 => sets company code to 1000
 "*" + 5000 => sets company code to 5000
 ```
+
+## Installing the dependencies
+
+```
+sudo apt-get install barcode
+sudo apt-get install graphicsmagick
+```
