@@ -162,14 +162,14 @@ void create_barcode ( struct Barcode * bc) {
 
     // generate barcode
 
-    char barcode_cmd[100];
-    sprintf(barcode_cmd, "barcode -b %s -o %s.ps -e \"128b\" -g \"590x240\";", bc->str, bc->filename);
+    char barcode_cmd[200];
+    sprintf(barcode_cmd, "barcode -b %s -o %s.ps -e \"128b\" -g \"600x240\";", bc->str, bc->filename);
     system(barcode_cmd);
 
     // convert .ps to .png with graphicsmagick
 
-    char convert_cmd[100];
-    sprintf(convert_cmd, "gm convert %s.ps -gravity south -resize 100%% -extent 696x271 -rotate 180 %s.png", bc->filename, bc->filename);
+    char convert_cmd[300];
+    sprintf(convert_cmd, "gm convert %s.ps -gravity south -extent 696x271 -rotate 180 -fill white -draw 'rectangle 80,33,618,44' -fill none -stroke black -strokewidth 2 -draw 'rectangle 395,4,508,38' %s.png", bc->filename, bc->filename);
     system(convert_cmd);
 }
 
@@ -194,13 +194,13 @@ void print_label ( struct Barcode * bc ) {
 }
 
 
-/* 5000-2019-2000100999 */
+/* 500020190000100999 */
 void print_barcode (pipe_producer_t* pipe_creator_prod, int company_code, int year, int long belnr) {
     char * barcode = malloc(20+1);
     char * filename = malloc(200);
     char rand[10+1];
     gen_random(rand, 10);
-    sprintf(barcode, "%i-%i-%lld", company_code, year, belnr);
+    sprintf(barcode, "%i%i%010ld", company_code, year, belnr);
     sprintf(filename,"%s_%s",barcode, rand);
 
     printf("filename: %s\n",filename);
