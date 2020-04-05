@@ -122,7 +122,7 @@ regex_t compile_regex (char * regex) {
 
     regex_rv = regcomp(&r, regex, REG_EXTENDED);
     if (regex_rv) {
-        fprintf(stderr, "Could not compile regex_5000_9999\n");
+        fprintf(stderr, "Could not compile regex_single_number\n");
         exit(1);
     }
     return r;
@@ -148,8 +148,9 @@ struct Barcode {
     char * str;
     int company_code;
     int year;
-    long belnr;
+    long long belnr;
     char * filename;
+    int format_version;
 };
 
 
@@ -160,16 +161,20 @@ void create_barcode ( struct Barcode * bc) {
     return;
 #endif
 
-    // generate barcode
-
     char barcode_cmd[200];
-    sprintf(barcode_cmd, "barcode -b %s -o %s.ps -e \"128b\" -g \"600x240\";", bc->str, bc->filename);
-    system(barcode_cmd);
-
-    // convert .ps to .png with graphicsmagick
-
     char convert_cmd[300];
-    sprintf(convert_cmd, "gm convert %s.ps -gravity south -extent 696x271 -rotate 180 -fill white -draw 'rectangle 80,33,618,44' -fill none -stroke black -strokewidth 2 -draw 'rectangle 395,4,508,38' %s.png", bc->filename, bc->filename);
+    if ( bc->format_version == 0 ) {
+        // generate barcode
+        sprintf(barcode_cmd, "barcode -b %s -o %s.ps -e \"i25\" -g \"590x300\";", bc->str, bc->filename);
+        // convert .ps to .png with graphicsmagick
+        sprintf(convert_cmd, "gm convert %s.ps -gravity south -resize 80%% -extent 696x271 -rotate 180 %s.png", bc->filename, bc->filename);
+    } else {
+        // generate barcode
+        sprintf(barcode_cmd, "barcode -b %s -o %s.ps -e \"128b\" -g \"600x240\";", bc->str, bc->filename);
+        // convert .ps to .png with graphicsmagick
+        sprintf(convert_cmd, "gm convert %s.ps -gravity south -extent 696x271 -rotate 180 -fill white -draw 'rectangle 80,33,618,44' -fill none -stroke black -strokewidth 2 -draw 'rectangle 395,4,508,38' %s.png", bc->filename, bc->filename);
+    }
+    system(barcode_cmd);
     system(convert_cmd);
 }
 
@@ -195,16 +200,20 @@ void print_label ( struct Barcode * bc ) {
 
 
 /* 500020190000100999 */
-void print_barcode (pipe_producer_t* pipe_creator_prod, int company_code, int year, int long belnr) {
+void print_barcode (pipe_producer_t* pipe_creator_prod, int company_code, int year, int long belnr, int format_version) {
     char * barcode = malloc(20+1);
     char * filename = malloc(200);
     char rand[10+1];
     gen_random(rand, 10);
-    sprintf(barcode, "%i%i%010ld", company_code, year, belnr);
+    if ( format_version == 0 ) {
+        sprintf(barcode, "%i%09ld", year, belnr);
+    } else {
+        sprintf(barcode, "%i%i%010ld", company_code, year, belnr);
+    }
     sprintf(filename,"%s_%s",barcode, rand);
 
     printf("filename: %s\n",filename);
-    struct Barcode bc = {barcode, company_code, year, belnr, filename};
+    struct Barcode bc = {barcode, company_code, year, belnr, filename, format_version};
     pipe_push(pipe_creator_prod, &bc, 1);
 }
 
@@ -281,71 +290,52 @@ int main (void) {
         fprintf(stderr, "Error creating thread\n");
         return 1;
     }
-
+    int format_version = 1;
     int company_code = read_company_code_from_file();
     int year  = read_year_from_file();
-    long belnr = 5000;
+    long long belnr = 5000;
     printf("year: %i\n", year);
 
     char * x = (char*)malloc(20);
 
     // Prepare regex
-    regex_t regex_5000_9999             = compile_regex("^[5-9][0-9]{3}$");
-    regex_t regex_100000_199999         = compile_regex("^1[0-9]{5}$");
-    regex_t regex_range_5000_9999       = compile_regex("^[5-9][0-9]{3}-[5-9][0-9]{3}$");
-    regex_t regex_range_100000_199999   = compile_regex("^1[0-9]{5}-1[0-9]{5}$");
-    regex_t regex_plus                  = compile_regex("^\\+$");
-    regex_t regex_year                  = compile_regex("^2[0-9]{3}$");
-    regex_t regex_company_code          = compile_regex("^\\*(1000|5000)$");
-
+    regex_t regex_single_number  = compile_regex("^[0-9]{1,10}$");
+    regex_t regex_range          = compile_regex("^[0-9]{1,10}-[0-9]{1,10}$");
+    regex_t regex_plus           = compile_regex("^\\+$"); // e.g. +
+    regex_t regex_year           = compile_regex("^\\/2[0-9]{3}$"); // e.g. /2021
+    regex_t regex_company_code   = compile_regex("^\\*[0-9]{4}$"); // e.g. *1000
+    regex_t regex_format_version = compile_regex("^\\*\\*[0-9]\\*\\*$"); // e.g. **0**
 
     while (true) {
         scanf("%s", x); // blocking
 
         /* Execute regular expression */
 
-        if ( regex_matches(regex_5000_9999, x) ||
-             regex_matches(regex_100000_199999, x) ) {
-            printf("5000/100000 match!\n");
+        if ( regex_matches(regex_single_number, x) ) {
+            printf("regex_single_number match!\n");
             char *end;
-            belnr = strtol(x, &end, 10);
-            print_barcode(pipe_creator_prod, company_code, year, belnr);
+            belnr = strtoll(x, &end, 10);
+            print_barcode(pipe_creator_prod, company_code, year, belnr, format_version);
         }
-        else if ( regex_matches(regex_range_5000_9999, x) ) {
-            printf("5000-9999 match!\n");
+        else if ( regex_matches(regex_range, x) ) {
+            printf("regex_range match!\n");
+            char * first_num = strtok(x, "-");
+            char * second_num = strtok(NULL, " ");
             char *end;
-            long from = strtol( substring(x, 0, 4), &end, 10);
-            long to   = strtol( substring(x, 5, 4), &end, 10);
-
+            long long from = strtoll( first_num, &end, 10);
+            long long to   = strtoll( second_num, &end, 10);
             if ( from > to ) {
                 continue;
             }
-            long i = 0;
-            for ( i = from; i <= to; i++ ) {
-                print_barcode(pipe_creator_prod, company_code, year, i);
+            long long belnr_i = 0;
+            for ( belnr_i = from; belnr_i <= to; belnr_i++ ) {
+                print_barcode(pipe_creator_prod, company_code, year, belnr_i, format_version);
             }
-
-            belnr = to;
-        }
-        else if ( regex_matches(regex_range_100000_199999, x) ) {
-            printf("100000-199999 match!\n");
-            char *end;
-            long from = strtol( substring(x, 0, 6), &end, 10);
-            long to   = strtol( substring(x, 7, 6), &end, 10);
-
-            if ( from > to ) {
-                continue;
-            }
-            long i = 0;
-            for ( i = from; i <= to; i++ ) {
-                print_barcode(pipe_creator_prod, company_code, year, i);
-            }
-
             belnr = to;
         }
         else if ( regex_matches(regex_year, x) ) {
             char *end;
-            long in = strtol(x, &end, 10);
+            long in = strtol( substring(x, 1, 4), &end, 10);
             printf("year set to: %ld \n", in);
             year = (int) in;
             write_year_to_file(year);
@@ -353,7 +343,7 @@ int main (void) {
         else if ( regex_matches(regex_plus, x) ) {
             printf("Inkrement\n");
             belnr++;
-            print_barcode(pipe_creator_prod, company_code, year, belnr);
+            print_barcode(pipe_creator_prod, company_code, year, belnr, format_version);
         }
         else if ( regex_matches(regex_company_code, x) ) {
             printf("Company code\n");
@@ -363,14 +353,20 @@ int main (void) {
             company_code = (int) cc;
             write_company_code_to_file(company_code);
         }
+        else if ( regex_matches(regex_format_version, x) ) {
+            printf("format_version mode\n");
+            char *end;
+            long in = strtol( substring(x, 2, 1), &end, 10);
+            printf("format_version set to: %ld \n", in);
+            format_version = (int) in;
+        }
         else {
             printf("---INVALID---\n");
         }
     }
 
     /* Free memory allocated to the pattern buffer by regcomp() */
-    //regfree(&regex_5000_9999);
-    //regfree(&regex_100000_199999);
+    //regfree(&regex_single_number);
 
     return 0;
 }
