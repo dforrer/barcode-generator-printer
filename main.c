@@ -200,7 +200,10 @@ void print_label ( struct Barcode * bc ) {
 
 
 /* 500020190000100999 */
-void print_barcode (pipe_producer_t* pipe_creator_prod, int company_code, int year, int long belnr, int format_version) {
+void print_barcode (pipe_producer_t* pipe_creator_prod, int company_code, int year, long long belnr, int format_version) {
+    if (belnr > 9999999999) {
+        return;
+    }
     char * barcode = malloc(20+1);
     char * filename = malloc(200);
     char rand[10+1];
@@ -331,9 +334,9 @@ int run () {
               to = from_tmp;
             }
             // limit number of barcodes printed to 100
-            // if ( (to - from) > 100 ) {
-            //   continue;
-            // }
+            if ( (to - from) > 200 ) {
+              continue;
+            }
             long long belnr_i = 0;
             for ( belnr_i = from; belnr_i <= to; belnr_i++ ) {
                 print_barcode(pipe_creator_prod, company_code, year, belnr_i, format_version);
