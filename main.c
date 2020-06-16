@@ -257,8 +257,7 @@ void * printer_thread_func (void *arg) {
     return NULL;
 }
 
-
-int main (void) {
+int run () {
     printf("This program allows you to print barcodes.\n");
 
     chdir("barcodes");
@@ -305,6 +304,7 @@ int main (void) {
     regex_t regex_year           = compile_regex("^\\/2[0-9]{3}$"); // e.g. /2021
     regex_t regex_company_code   = compile_regex("^\\*[0-9]{4}$"); // e.g. *1000
     regex_t regex_format_version = compile_regex("^\\*\\*[0-9]\\*\\*$"); // e.g. **0**
+    regex_t regex_restart        = compile_regex("^\\.\\.\\.$"); // ...
 
     while (true) {
         scanf("%s", x); // blocking
@@ -325,8 +325,15 @@ int main (void) {
             long long from = strtoll( first_num, &end, 10);
             long long to   = strtoll( second_num, &end, 10);
             if ( from > to ) {
-                continue;
+              // flip from and to
+              long long from_tmp = from;
+              from = to;
+              to = from_tmp;
             }
+            // limit number of barcodes printed to 100
+            // if ( (to - from) > 100 ) {
+            //   continue;
+            // }
             long long belnr_i = 0;
             for ( belnr_i = from; belnr_i <= to; belnr_i++ ) {
                 print_barcode(pipe_creator_prod, company_code, year, belnr_i, format_version);
@@ -360,13 +367,69 @@ int main (void) {
             printf("format_version set to: %ld \n", in);
             format_version = (int) in;
         }
+        else if ( regex_matches(regex_restart, x) ) {
+            printf("restart app\n");
+            /* kill creator_thread */
+            void *res;
+            int s;
+            s = pthread_cancel(creator_thread);
+            if (s != 0) {
+               printf("pthread_cancel error: %d\n", s);
+            }
+            s = pthread_join(creator_thread, &res);
+            if (s != 0) {
+                printf("pthread_join error: %d\n", s);
+            }
+            if (res == PTHREAD_CANCELED) {
+                printf("main(): thread was canceled\n");
+            } else {
+                printf("main(): thread wasn't canceled (shouldn't happen!)\n");
+            }
+            /* kill printer_thread */
+            s = pthread_cancel(printer_thread);
+            if (s != 0) {
+               printf("pthread_cancel error: %d\n", s);
+            }
+            s = pthread_join(printer_thread, &res);
+            if (s != 0) {
+                printf("pthread_join error: %d\n", s);
+            }
+            if (res == PTHREAD_CANCELED) {
+                printf("main(): thread was canceled\n");
+            } else {
+                printf("main(): thread wasn't canceled (shouldn't happen!)\n");
+            }
+            /* Free memory allocated to the pattern buffer by regcomp() */
+            regfree(&regex_single_number);
+            regfree(&regex_range);
+            regfree(&regex_plus);
+            regfree(&regex_year);
+            regfree(&regex_company_code);
+            regfree(&regex_format_version);
+            regfree(&regex_restart);
+
+            /* cleanup generated barcodes */
+            system("rm *.png");
+            system("rm *.ps");
+
+            // pipe_producer_free(pipe_creator_prod);
+            // pipe_consumer_free(pipe_creator_cons);
+            // pipe_producer_free(pipe_printer_prod);
+            // pipe_consumer_free(pipe_printer_cons);
+
+            free(x);
+            return 0;
+        }
         else {
             printf("---INVALID---\n");
         }
     }
 
-    /* Free memory allocated to the pattern buffer by regcomp() */
-    //regfree(&regex_single_number);
-
     return 0;
+}
+
+int main (void) {
+    while( true ) {
+        run();
+    }
 }
