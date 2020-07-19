@@ -209,9 +209,9 @@ void print_barcode (pipe_producer_t* pipe_creator_prod, int company_code, int ye
     char rand[10+1];
     gen_random(rand, 10);
     if ( format_version == 0 ) {
-        sprintf(barcode, "%i%09ld", year, belnr);
+        sprintf(barcode, "%i%09lld", year, belnr);
     } else {
-        sprintf(barcode, "%i%i%010ld", company_code, year, belnr);
+        sprintf(barcode, "%i%i%010lld", company_code, year, belnr);
     }
     sprintf(filename,"%s_%s",barcode, rand);
 
