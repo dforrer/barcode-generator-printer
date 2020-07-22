@@ -170,9 +170,9 @@ void create_barcode ( struct Barcode * bc) {
         sprintf(convert_cmd, "gm convert %s.ps -gravity south -resize 80%% -extent 696x271 -rotate 180 %s.png", bc->filename, bc->filename);
     } else {
         // generate barcode
-        sprintf(barcode_cmd, "barcode -b %s -o %s.ps -e \"128b\" -g \"600x240\";", bc->str, bc->filename);
+        sprintf(barcode_cmd, "barcode -b %s -o %s.ps -e \"128b\" -E -g \"696x271\";", bc->str, bc->filename);
         // convert .ps to .png with graphicsmagick
-        sprintf(convert_cmd, "gm convert %s.ps -gravity south -extent 696x271 -rotate 180 -fill white -draw 'rectangle 80,33,618,44' -fill none -stroke black -strokewidth 2 -draw 'rectangle 395,4,508,38' %s.png", bc->filename, bc->filename);
+        sprintf(convert_cmd, "gm convert %s.ps -gravity south -extent 696x271 -rotate 180 -fill white -draw 'rectangle 41,37,670,44' -fill none -stroke black -strokewidth 2 -draw 'rectangle 406,4,539,40' %s.png", bc->filename, bc->filename);
     }
     system(barcode_cmd);
     system(convert_cmd);
